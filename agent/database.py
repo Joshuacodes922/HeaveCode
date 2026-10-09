@@ -21,6 +21,9 @@ class SessionStore:
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 )"""
             )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS messages_session_id_id_idx ON messages (session_id, id)"
+            )
 
     def load_messages(self, session_id: str) -> list[dict]:
         with psycopg.connect(self.database_url) as connection:
