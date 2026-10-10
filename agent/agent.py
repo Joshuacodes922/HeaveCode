@@ -26,6 +26,22 @@ Ground your claims in returned sources and cite them as [document, section, page
 
 When no more tool calls are needed, give a concise final answer."""
 
+VULKAN_GROUNDING_KEYWORDS = (
+    "vulkan",
+    "graphics pipeline",
+    "swapchain",
+    "validation layer",
+    "vuid",
+    "shader",
+    "render pass",
+    "pipeline",
+    "descriptor",
+    "queue",
+    "image layout",
+    "synchronization",
+    "gpu",
+)
+
 
 def text_tool_calls(content: str) -> list[dict[str, Any]]:
     """Compatibility parser for explicit text-form tool calls from older models."""
@@ -73,6 +89,35 @@ class CodingAgent:
     def _message_as_dict(message: Any) -> dict[str, Any]:
         return message.model_dump(exclude_none=True) if hasattr(message, "model_dump") else dict(message)
 
+    @staticmethod
+    def _is_vulkan_query(text: str) -> bool:
+        lowered = text.lower()
+        return any(keyword in lowered for keyword in VULKAN_GROUNDING_KEYWORDS)
+
+    def _auto_ground_vulkan_query(self, conversation: list[dict[str, Any]], session_id: str, additions: list[dict[str, Any]]) -> bool:
+        if self.tools.vulkan_rag is None:
+            return False
+        for index in range(len(conversation) - 1, -1, -1):
+            message = conversation[index]
+            if message.get("role") != "user":
+                continue
+            if any(entry.get("role") == "tool" for entry in conversation[index + 1:]):
+                continue
+            content = str(message.get("content", "") or "")
+            if self._is_vulkan_query(content):
+                query = content.strip()
+                self.logger.log("tool_requested", session_id=session_id, tool="search_vulkan_docs", arguments={"query": query})
+                try:
+                    result = self.tools.execute("search_vulkan_docs", {"query": query})
+                except Exception as error:
+                    result = f"Tool error: {error}"
+                self.logger.log("tool_finished", session_id=session_id, tool="search_vulkan_docs", result=result)
+                tool_message = {"role": "tool", "content": result}
+                conversation.append(tool_message)
+                additions.append(tool_message)
+                return True
+        return False
+
     def _model_call(self, conversation: list[dict[str, Any]]) -> dict[str, Any]:
         for attempt in range(2):
             started = time.perf_counter()
@@ -106,9 +151,14 @@ class CodingAgent:
             assistant_message = self._model_call(conversation)
 
             print(f"\n[assistant] {assistant_message.get('content', '')}")
+            calls = assistant_message.get("tool_calls") or text_tool_calls(assistant_message.get("content", ""))
+
+            if not calls and self._auto_ground_vulkan_query(conversation, session_id, additions):
+                self.logger.log("agent_regrounded", session_id=session_id, rounds=round_number)
+                continue
+
             conversation.append(assistant_message)
             additions.append(assistant_message)
-            calls = assistant_message.get("tool_calls") or text_tool_calls(assistant_message.get("content", ""))
 
             print(f"  [tool calls] {calls} \n\n\n\n\n")
             if not calls:

@@ -23,6 +23,7 @@ RAG_TOOL_SCHEMA = {
             "properties": {
                 "query": {"type": "string", "description": "Precise graphics or Vulkan documentation question."},
                 "vuid": {"type": "string", "description": "Optional VUID from a validation message."},
+                "document": {"type": "string", "description": "Optional document name to limit search to (e.g. vulkan_documentation.pdf)."},
                 "limit": {"type": "integer", "description": "Result count from 1 to 5; defaults to 3."},
             },
             "required": ["query"],
@@ -40,24 +41,28 @@ class VulkanRagClient:
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
 
-    def search(self, query: object, vuid: object = None, limit: object = 3) -> str:
+    def search(self, query: object, vuid: object = None, limit: object = 3, document: object = None) -> str:
         if not isinstance(query, str) or not query.strip():
             raise VulkanRagError("'query' must be a non-empty string")
         if vuid is not None and not isinstance(vuid, str):
             raise VulkanRagError("'vuid' must be a string")
+        if document is not None and not isinstance(document, str):
+            raise VulkanRagError("'document' must be a string")
         if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 5:
             raise VulkanRagError("'limit' must be an integer from 1 to 5")
 
         search_query = f"{vuid.strip()} {query}".strip() if vuid else query.strip()
-        body = json.dumps(
-            {
-                "query": search_query[:1000],
-                "limit": limit,
-                "rerank": True,
-                "context_window": 1,
-                "parent_context": False,
-            }
-        ).encode("utf-8")
+        payload_data = {
+            "query": search_query[:1000],
+            "limit": limit,
+            "rerank": True,
+            "context_window": 1,
+            "parent_context": False,
+        }
+        if document:
+            payload_data["document"] = document.strip()
+
+        body = json.dumps(payload_data).encode("utf-8")
         request = Request(
             f"{self.base_url}/v1/search",
             data=body,

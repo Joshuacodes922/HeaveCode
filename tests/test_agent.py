@@ -65,3 +65,23 @@ class AgentTests(unittest.TestCase):
             self.assertEqual(answer, "A VUID is documented.")
             self.assertIn("Vulkan Spec", additions[1]["content"])
             logger.close()
+
+    def test_vulkan_questions_are_grounded_by_rag_when_model_ignores_the_tool(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            logger = EventLogger(f"{directory}/events.jsonl")
+            agent = ScriptedAgent(
+                [
+                    {"role": "assistant", "content": "Validation layers are helper code."},
+                    {"role": "assistant", "content": "Grounded answer from docs."},
+                ],
+                model="test", ollama_host="http://unused",
+                tools=ToolExecutor(directory, require_write_approval=False), logger=logger,
+                vulkan_rag=FakeVulkanRag(),
+            )
+            answer, additions = agent.respond([
+                {"role": "user", "content": "What is a Vulkan validation layer?"},
+            ], "forced-rag-session")
+            self.assertEqual(answer, "Grounded answer from docs.")
+            self.assertTrue(any(m.get("role") == "tool" for m in additions))
+            self.assertTrue(any("Vulkan Spec" in m.get("content", "") for m in additions if m.get("role") == "tool"))
+            logger.close()

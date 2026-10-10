@@ -1,0 +1,53 @@
+{
+  "project": "mini-coding-agent",
+  "generated_at": "2026-10-10T00:36:23+00:00",
+  "summary": {
+    "total_unused_or_low_value_files": 5,
+    "generated_folders_count": 2,
+    "status": "good_condition_but_has_cleanup_candidates"
+  },
+  "unused_or_low_value_files": [
+    {
+      "path": "bob.txt",
+      "classification": "stray_artifact",
+      "reason": "No references found in code or config; appears to be a scratch/test artifact.",
+      "keep_or_remove": "remove_if_not_intentionally_kept"
+    },
+    {
+      "path": "swapchain.cpp",
+      "classification": "sample_or_reference_file",
+      "reason": "Standalone C++ sample not imported by the Python app or build configuration.",
+      "keep_or_remove": "remove_if_not_intentionally_kept"
+    },
+    {
+      "path": "test.py",
+      "classification": "example_or_eval_file",
+      "reason": "Used only as an example in evaluation tasks, not as a runtime dependency of the agent.",
+      "keep_or_remove": "keep_only_if_used_as_demo_file"
+    },
+    {
+      "path": "__pycache__",
+      "classification": "generated_cache",
+      "reason": "Generated Python bytecode cache; should not be tracked or versioned.",
+      "keep_or_remove": "delete_or_ignore"
+    },
+    {
+      "path": "logs",
+      "classification": "runtime_output",
+      "reason": "Runtime-generated JSONL logs; not source code and should be excluded from version control.",
+      "keep_or_remove": "delete_or_ignore"
+    }
+  ],
+  "generated_directories": [
+    {
+      "path": "vk-rag/.venv",
+      "classification": "environment_artifact",
+      "reason": "Local Python environment for nested service; not application source."
+    },
+    {
+      "path": "vk-rag/app/frontend/node_modules",
+      "classification": "dependency_install_artifact",
+      "reason": "Generated frontend dependency installation output; not source code."
+    }
+  ]
+}

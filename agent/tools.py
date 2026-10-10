@@ -74,10 +74,11 @@ class ToolExecutor:
             args = self._validate(arguments, {"command"}, {"command"})
             return self.run_shell(args["command"])
         if name == "search_vulkan_docs":
-            args = self._validate(arguments, {"query"}, {"query", "vuid", "limit"})
+            args = self._validate(arguments, {"query"}, {"query", "vuid", "document", "limit"})
             return self.search_vulkan_docs(
                 query=args["query"],
                 vuid=args.get("vuid"),
+                document=args.get("document"),
                 limit=args.get("limit", 3),
             )
         raise ToolError(f"Unknown tool: {name}")
@@ -159,12 +160,12 @@ class ToolExecutor:
         except subprocess.CalledProcessError as error:
             raise ToolError(f"Shell command failed with exit code {error.returncode}: {error.stderr.strip()}") from error
 
-    def search_vulkan_docs(self, query: str, vuid: str | None = None, limit: int = 3) -> str:
+    def search_vulkan_docs(self, query: str, vuid: str | None = None, limit: int = 3, document: str | None = None) -> str:
         """Search the local Vulkan and graphics documentation knowledge base."""
         if self.vulkan_rag is None:
             raise ToolError("Vulkan RAG is not configured")
         try:
-            return self.vulkan_rag.search(query=query, vuid=vuid, limit=limit)
+            return self.vulkan_rag.search(query=query, vuid=vuid, limit=limit, document=document)
         except VulkanRagError as error:
             raise ToolError(str(error)) from error
 
