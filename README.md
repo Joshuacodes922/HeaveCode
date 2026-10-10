@@ -127,7 +127,7 @@ USER
 The agent adds each model response and tool result to the conversation, then calls the model again. The loop ends when the model returns a response with no tool calls.
 
 
-DOCUMENTING MY CODING AGENT V1:
+DOCUMENTING MY CODING AGENT V3:
 
 - Supports sessions which contain all the messages which are stored in databases which are loaded everytime the session is loaded
 
