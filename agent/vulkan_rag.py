@@ -55,7 +55,7 @@ class VulkanRagClient:
         payload_data = {
             "query": search_query[:1000],
             "limit": limit,
-            "rerank": True,
+            "rerank": False,
             "context_window": 1,
             "parent_context": False,
         }

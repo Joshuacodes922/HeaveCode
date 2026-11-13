@@ -3,3 +3,5 @@
 __pycache__/
 *.py[cod]
 logs/
+coding_agent_langgraph.ipynb
+rag_langchain_langgraph.ipynb

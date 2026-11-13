@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 
 from agent.agent import CodingAgent, text_tool_calls
+from agent.memory import EpisodeMemory
 from agent.observability import EventLogger
 from agent.tools import ToolExecutor
 
@@ -13,12 +15,34 @@ class FakeVulkanRag:
         return '{"sources":[{"document":"Vulkan Spec","section":"Barriers","pages":"1-1"}]}'
 
 
+class FakeMemoryStore:
+    def __init__(self, memories=None):
+        self.memories = memories or []
+        self.saved = {}
+        self.search_query = None
+
+    def load_episode(self, session_id):
+        return self.saved.get(session_id)
+
+    def search_episodes(self, query, exclude_session_id, limit=3):
+        self.search_query = query
+        return self.memories[:limit]
+
+    def save_episode(self, session_id, memory):
+        self.saved[session_id] = memory
+
+    def delete_episode(self, session_id):
+        return self.saved.pop(session_id, None) is not None
+
+
 class ScriptedAgent(CodingAgent):
     def __init__(self, replies, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.replies = iter(replies)
+        self.conversations = []
 
     def _model_call(self, conversation):
+        self.conversations.append(list(conversation))
         return next(self.replies)
 
 
@@ -84,4 +108,70 @@ class AgentTests(unittest.TestCase):
             self.assertEqual(answer, "Grounded answer from docs.")
             self.assertTrue(any(m.get("role") == "tool" for m in additions))
             self.assertTrue(any("Vulkan Spec" in m.get("content", "") for m in additions if m.get("role") == "tool"))
+            logger.close()
+
+    def test_relevant_episodic_memory_is_added_to_working_context(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            logger = EventLogger(f"{directory}/events.jsonl")
+            memory_store = FakeMemoryStore([
+                EpisodeMemory(
+                    summary="The project uses PostgreSQL for chat history.",
+                    facts=["The coding agent is built in Python."],
+                    decisions=[],
+                    preferences=[],
+                    open_questions=[],
+                ),
+            ])
+            agent = ScriptedAgent(
+                [{"role": "assistant", "content": "I will use the existing PostgreSQL store."}],
+                model="test", ollama_host="http://unused",
+                tools=ToolExecutor(directory, require_write_approval=False), logger=logger,
+                memory_store=memory_store,
+            )
+            answer, _ = agent.respond([
+                {"role": "user", "content": "How does this project persist chat history?"},
+            ], "current-session")
+            self.assertIn("PostgreSQL", agent.conversations[0][1]["content"])
+            self.assertEqual(memory_store.search_query, "How does this project persist chat history?")
+            self.assertEqual(answer, "I will use the existing PostgreSQL store.")
+            logger.close()
+
+    def test_distill_session_saves_structured_episode_memory(self) -> None:
+        class MemoryClient:
+            def chat(self, **kwargs):
+                return {
+                    "message": {
+                        "content": (
+                            '{"summary":"The project uses PostgreSQL for sessions.",'
+                            '"facts":["The agent uses Ollama."],"decisions":["Use a local model."],'
+                            '"preferences":["Prefer concise explanations."],"open_questions":[]}'
+                        )
+                    }
+                }
+
+        with tempfile.TemporaryDirectory() as directory:
+            log_path = f"{directory}/events.jsonl"
+            logger = EventLogger(log_path)
+            memory_store = FakeMemoryStore()
+            agent = ScriptedAgent(
+                [], model="test", ollama_host="http://unused",
+                tools=ToolExecutor(directory, require_write_approval=False), logger=logger,
+                memory_store=memory_store,
+            )
+            agent.client = MemoryClient()
+            saved = agent.distill_session([
+                {"role": "user", "content": "Use PostgreSQL for sessions."},
+                {"role": "assistant", "content": "Understood."},
+            ], "completed-session")
+            self.assertTrue(saved)
+            self.assertEqual(
+                memory_store.saved["completed-session"].summary,
+                "The project uses PostgreSQL for sessions.",
+            )
+            with open(log_path, encoding="utf-8") as log_file:
+                events = [json.loads(line) for line in log_file]
+            distilled = next(event for event in events if event["event"] == "episode_distilled")
+            self.assertIn("model_duration_ms", distilled)
+            self.assertIn("storage_duration_ms", distilled)
+            self.assertEqual(distilled["transcript_messages"], 2)
             logger.close()

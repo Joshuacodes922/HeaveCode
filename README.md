@@ -1,4 +1,4 @@
-# HeaveCode — Local AI Coding Agent 
+# Basic Coding Agent
 
 HeaveCode is a local terminal coding agent using an Ollama model, safe workspace tools, and PostgreSQL-backed chat sessions.xcsdssd
 
